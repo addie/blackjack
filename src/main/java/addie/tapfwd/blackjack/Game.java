@@ -6,11 +6,8 @@ import org.apache.commons.lang3.StringUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Scanner;
-import java.util.logging.SocketHandler;
-import java.util.stream.Collectors;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 /*
     Basic Requirements
@@ -36,192 +33,421 @@ public class Game {
     private static final int DEFAULT_MAX_BET = 10000;
     private static final int TWENTY_ONE = 21;
 
-    private void play(int startingCash, int numPlayers, int minBet, int maxBet, int numDecks) throws IOException {
+    private Scanner in;
+    private List<Player> players;
+    private Dealer dealer;
+    private Deck deck;
+
+    private void play(int startingCash, int numPlayers, int minBet, int maxBet, int numDecks) throws IOException, InterruptedException {
 
         // Intro
         printSplash();
-        println("Welcome to Blackjack!");
+        println("Welcome to Blackjack! by Addie Bendory");
         println("Number of Players: " + numPlayers + "\nStarting Cash: $" + startingCash);
         print("\n");
-        Scanner in = new Scanner(System.in);
 
         // Create the game components
-        List<Player> players = createPlayers(numPlayers, startingCash);
-        Dealer dealer = new Dealer();
-        Deck deck = new Deck(numDecks);
+        in = new Scanner(System.in);
+        players = createPlayers(numPlayers, startingCash);
+        deck = new Deck(numDecks);
+        dealer = new Dealer();
 
         // Stores the total cash on hand for the game loop
         int totalCash = players.stream().mapToInt(Player::getCash).sum();
 
         // Game loop
         while (totalCash > 0) {
-            GameStatus status;
-            println("Ladies and gentlemen! Place your bets!");
-            println("(Press Ctrl-C to exit)");
-            for (Player player : players) {
-                takeBet(player, minBet, maxBet);
-            }
-            println("\nAll bets are in.\n");
-            println("Dealing cards...");
-            dealCards(deck, players, dealer);
-            status = checkNaturals(players, dealer);
-            if (status == GameStatus.COMPLETE) {
-                println("Hand is over!");
-                resolveBets(players);
-                continue;
-            }
-            status = playerRound(deck, players, dealer);
-            if (status == GameStatus.COMPLETE) {
-                println("Hand is over!");
-                resolveBets(players);
-                continue;
-            }
-            dealerRound(deck, dealer, players);
-            resolveBets(players);
-        }
 
+            showPlayersCashRemaining();
+            takeBets(minBet, maxBet);
+            dealCards();
+            offerInsurance();
+
+            GameStatus status = checkBlackjack();
+
+            // player round
+            if (status != GameStatus.COMPLETE) {
+                status = playerRound();
+            }
+
+            // dealer round
+            if (status != GameStatus.COMPLETE) {
+                dealerRound();
+            }
+
+            // resolve all bets
+            resolveBets();
+
+            // remove bankrupt players
+            removePlayers(minBet);
+
+            // recalculate cash left
+            totalCash = players.stream().mapToInt(Player::getCash).sum();
+            if (totalCash > 0) {
+                println("Let's play another round!\n");
+            }
+        }
         println("Game over! Come back when you've got some more money!!");
     }
 
     // Rounding down the pennies
-    private void resolveBets(List<Player> players) {
+    private void resolveBets() {
         try {
-            int win = 0;
+            int win;
+            println("Results of this hand");
+            println("--------------------");
+            showAllCards(false);
+            print("\n");
             for (Player player : players) {
-                Hand.Status status = player.getHand().getStatus();
-                switch (status) {
-                    case NATURAL:
-                        win = (int)(player.getBet() * Hand.Status.NATURAL.getMultiplier());
-                        player.addCash(win);
-                        println(player.getName() + " won big!");
-                        break;
-                    case PUSH:
-                        println(player.getName() + " pushed");
-                        win = (int)(player.getBet() * Hand.Status.PUSH.getMultiplier());
-                        player.addCash(win);
-                        break;
-                    case WIN:
-                    case BLACKJACK:
-                        win = (int)(player.getBet() * Hand.Status.WIN.getMultiplier());
-                        player.addCash(win);
-                        println(player.getName() + " won!");
-                        break;
-                    case LOSS:
-                        println(player.getName() + " lost");
-                        break;
-                    default:
-                        throw new IllegalArgumentException("Status is invalid");
+                for (Hand hand : player.getHands()) {
+                    Hand.Status status = hand.getStatus();
+                    switch (status) {
+                        case BLACKJACK:
+                            win = (int) (hand.getBet() * Hand.Status.BLACKJACK.getMultiplier());
+                            player.addCash(win);
+                            println(player.getName() + " got a blackjack!");
+                            break;
+                        case PUSH:
+                            println(player.getName() + " pushed");
+                            win = (int) (hand.getBet() * Hand.Status.PUSH.getMultiplier());
+                            player.addCash(win);
+                            break;
+                        case WIN:
+                            win = (int) (hand.getBet() * Hand.Status.WIN.getMultiplier());
+                            player.addCash(win);
+                            println(player.getName() + " won!");
+                            break;
+                        case LOSS:
+                            println(player.getName() + " lost");
+                            break;
+                        default:
+                            throw new IllegalArgumentException("ERROR: Player status is invalid");
+                    }
                 }
             }
+            print("\n");
         } catch (IllegalArgumentException ex) {
-            println(ex.getMessage());
+            println(ex.getMessage() + "\n");
+            System.exit(1);
         }
 
     }
 
-    private void takeBet(Player player, int minBet, int maxBet) {
-        Scanner in = new Scanner(System.in);
-        print("Enter bet for " + player.getName() + ": ");
-        Integer bet = Integer.parseInt(in.nextLine());
-        while (!validBet(bet, minBet, maxBet)) {
-            println("Invalid bet. Bet must be between $" + minBet + " and $" + maxBet);
-            print("Enter bet for " + player.getName() + ": ");
-            bet = Integer.parseInt(in.nextLine());
+    private void offerInsurance() {
+        Card.Rank dealerCard = dealer.getExposedCards().get(0).getRank();
+        // Offering on dealer ACE only but can be changed here
+        if (dealerCard == Card.Rank.ACE) {
+            for (Player player : players) {
+                String input;
+                do {
+                    showAllCards(true);
+                    print("\n");
+                    print(player.getName() + ", do you want insurance? > ");
+                    input = in.nextLine();
+                } while (!validInput(input, new HashSet<>(Arrays.asList("y", "n"))));
+                if ("y".equals(input)) {
+                    getInsurance(player);
+                }
+            }
+            print("\n");
         }
-        player.setBet(bet);
     }
 
-    private GameStatus playerRound(Deck deck, List<Player> players, Dealer dealer) {
-        println("\n-- Player's Round --");
-        Scanner in = new Scanner(System.in);
-        GameStatus gameStatus = GameStatus.COMPLETE;
+    private void getInsurance(Player player) {
+        String input;
+        do {
+            print("How much? (You can wager up to $" + player.getHands().get(0).getBet() / 2 + ") > ");
+            input = in.nextLine();
+        } while (Integer.parseInt(input) > (player.getHands().get(0).getBet() / 2));
+        int insurance = Integer.parseInt(input);
+        player.subCash(insurance);
+        player.setInsurance(insurance);
+    }
+
+    private void removePlayers(int minBet) {
+        players.removeIf(player -> player.getCash() < minBet);
+    }
+
+    private void showPlayersCashRemaining() {
         for (Player player : players) {
-            if (player.getHand().getStatus() != Hand.Status.IN_PROGRESS) {
+            println(player.getName() + " has $" + player.getCash() + " remaining");
+        }
+        print("\n");
+    }
+
+    private void takeBets(int minBet, int maxBet) {
+        println("Place your bets!");
+        for (Player player : players) {
+            if (player.getCash() < minBet) {
                 continue;
             }
-            showDealerCards(dealer, true);
-            showAllPlayerCards(players);
-            String move;
-            do {
-                print(player.getName() + "(h)it or (s)tand? > ");
-                move = in.nextLine();
-                if ("h".equals(move)) {
-                    player.getHand().addCard(deck.dealCard());
-                    if (player.getHand().getValue() > TWENTY_ONE) {
-                        println(player.getName() + " busts!\n");
-                        player.getHand().setStatus(Hand.Status.LOSS);
-                        break;
-                    }
-                } else if (!"s".equals(move)) {
-                    println("Invalid input. Try again.");
-                }
-            } while (!"s".equals(move));
-            println(player.getName() + " stands!\n");
-            if (Hand.Status.IN_PROGRESS == player.getHand().getStatus()) {
-                gameStatus = GameStatus.IN_PROGRESS;
+            int playerMaxBet = Integer.min(maxBet, player.getCash());
+            print("Enter bet for " + player.getName() + ": ");
+            int bet = validateBet(in.nextLine());
+            while (!validBet(bet, minBet, playerMaxBet)) {
+                println("Invalid bet. Bet must be between $" + minBet + " and $" + playerMaxBet);
+                print("Enter bet for " + player.getName() + ": ");
+                bet = validateBet(in.nextLine());
             }
+            player.getHands().get(0).setBet(bet);
+            player.subCash(bet);
+        }
+        println("All bets are in.\n");
+    }
+
+    private int validateBet(String input) {
+        int bet;
+        try {
+            bet = Integer.parseInt(input);
+        } catch (NumberFormatException e) {
+            bet = -1;
+        }
+        return bet;
+    }
+
+    private GameStatus playerRound() {
+        println("-- Player's Round --");
+        GameStatus gameStatus = GameStatus.COMPLETE;
+        for (Player player : players) {
+            gameStatus = playHand(gameStatus, player, player.getHands().get(0));
         }
         return gameStatus;
     }
 
-    private void dealerRound(Deck deck, Dealer dealer, List<Player> players) {
-        println("\n-- Dealer's Round --");
+    private GameStatus playHand(GameStatus gameStatus, Player player, Hand hand) {
+        // Skip any players that blackjacked
+        if (hand.getStatus() != Hand.Status.IN_PROGRESS) {
+            return gameStatus;
+        }
+
+        // Prompt player
+        promptPlayerForMove(player, hand);
+
+        // Get card values to check for double down or split
+        List<Card> cards = hand.getCards();
+        Card.Rank firstRank = cards.get(0).getRank();
+        Card.Rank secondRank = cards.get(1).getRank();
+        int value = firstRank.getValue() + secondRank.getValue();
+
+        String move;
+        if (playerDoubledDown(player, hand, value)) {
+            doubleDown(player, hand);
+            gameStatus = GameStatus.IN_PROGRESS;
+        } else if (firstRank.equals(secondRank)) {
+            do {
+                print("(h)it or (s)tand or spli(t)? > ");
+                move = in.nextLine().toLowerCase();
+            } while (!validInput(move, new HashSet<>(Arrays.asList("h", "s", "t"))));
+            gameStatus = processChanceToSplit(gameStatus, player, move);
+        } else {
+            do {
+                print("(h)it or (s)tand? > ");
+                move = in.nextLine().toLowerCase();
+            } while (!validInput(move, new HashSet<>(Arrays.asList("h", "s"))));
+            gameStatus = processPlayerAction(gameStatus, player, hand, move);
+        }
+
+        return gameStatus;
+    }
+
+    private void doubleDown(Player player, Hand hand) {
+        int newBet = hand.getBet();
+        hand.addBet(newBet);
+        player.subCash(newBet);
+        Card card = deck.dealCard();
+        hand.addCard(card);
+        if (hand.getValue() > TWENTY_ONE) {
+            println(player.getName() + " busts!\n");
+            hand.setStatus(Hand.Status.LOSS);
+        }
+    }
+
+    private boolean playerDoubledDown(Player player, Hand hand, int value) {
+        String move;
+        boolean doubleDown = false;
+        if (value >= 9 && value <= 11) {
+            do {
+                print("Double down? (y) or (n) > ");
+                move = in.nextLine();
+            } while (!validInput(move, new HashSet<>(Arrays.asList("y", "n"))));
+            if (player.getCash() < hand.getBet()) {
+                println("Not enough cash!!");
+            } else if ("y".equals(move)) {
+                doubleDown = true;
+                hand.setStatus(Hand.Status.STAND);
+            }
+            print("\n");
+        }
+        return doubleDown;
+    }
+
+    private boolean validInput(String input, Set<String> validInput) {
+        return validInput.contains(input.toLowerCase());
+    }
+
+    private void promptPlayerForMove(Player player, Hand hand) {
+        showAllCards(player.getName(), hand.getId(),  true);
+        println("\n" + player.getName() + "'s move.");
+    }
+
+    private GameStatus processPlayerAction(GameStatus gameStatus, Player player, Hand hand, String move) {
+        // We split to get here, so just prompt again
+        if ("t".equals(move)) {
+            promptPlayerForMove(player, hand);
+            print("(h)it or (s)tand? > ");
+            move = in.nextLine();
+        }
+        // loop while player doesn't stand or bust
+        while ("h".equals(move)) {
+            hand.addCard(deck.dealCard());
+            if (hand.getValue() > TWENTY_ONE) {
+                println(player.getName() + " busts!\n");
+                hand.setStatus(Hand.Status.LOSS);
+                break;
+            }
+            promptPlayerForMove(player, hand);
+            print("(h)it or (s)tand? > ");
+            move = in.nextLine();
+        }
+        if (Hand.Status.IN_PROGRESS == hand.getStatus()) {
+            println(player.getName() + " stands!\n");
+            player.getHands().get(0).setStatus(Hand.Status.STAND);
+            gameStatus = GameStatus.IN_PROGRESS;
+        }
+        return gameStatus;
+    }
+
+    private GameStatus processChanceToSplit(GameStatus gameStatus, Player player, String move) {
+        // handle the split here
+        if ("t".equals(move)) {
+            if (player.getCash() >= player.getHands().get(0).getBet()) {
+                player = splitHands(player);
+                for (Hand hand : player.getHands()) {
+                    gameStatus = processPlayerAction(gameStatus, player, hand, move);
+                }
+            } else {
+                println("Not enough cash to split.");
+                do {
+                    print("(h)it or (s)tand? > ");
+                    move = in.nextLine().toLowerCase();
+                } while (!validInput(move, new HashSet<>(Arrays.asList("h", "s"))));
+                Hand firstHand = player.getHands().get(0);
+                gameStatus = processPlayerAction(gameStatus, player, firstHand, move);
+            }
+        } else {
+            Hand firstHand = player.getHands().get(0);
+            gameStatus = processPlayerAction(gameStatus, player, firstHand, move);
+        }
+        return gameStatus;
+    }
+
+    private Player splitHands(Player player) {
+        // get orig
+        Hand original = player.getHands().get(0);
+        Card first = original.getCards().get(0);
+        Card second = original.getCards().get(1);
+
+        // create new hands
+        int bet = original.getBet();
+        Hand hand1 = new Hand(new ArrayList<>(Arrays.asList(first, deck.dealCard())));
+        hand1.setId(1);
+        hand1.setBet(bet);
+        Hand hand2 = new Hand(new ArrayList<>(Arrays.asList(second, deck.dealCard())));
+        hand2.setId(2);
+        hand2.setBet(bet);
+        player.subCash(bet);
+        player.setHands(new ArrayList<>(Arrays.asList(hand1, hand2)));
+
+        return player;
+    }
+
+    private void dealerRound() throws InterruptedException {
+        println("-- Dealer's Round --");
         int value;
         do {
-            showDealerCards(dealer, false);
-            showAllPlayerCards(players);
+            showAllCards(false);
             value = dealer.getHand().getValue();
             if (value <= 16) {
-                println("Dealer shows " + value + ". Dealer hits.");
+                println("Dealer hits.\n");
                 dealer.getHand().addCard(deck.dealCard());
-                showDealerCards(dealer, false);
+            } else if (value <= 21) {
+                println("Dealer stands.\n");
             } else {
-                if (value > 21) {
-                    println("Dealer shows " + value + ". Dealer busts!");
-                    dealer.getHand().setStatus(Hand.Status.LOSS);
-                } else {
-                    println("Dealer shows " + value + ". Dealer stands.");
-                    showDealerCards(dealer, false);
+                println("Dealer busts!\n");
+                dealer.getHand().setStatus(Hand.Status.LOSS);
+            }
+            TimeUnit.SECONDS.sleep(1);
+        } while (value <= 16);
+        setFinalHandStatus();
+    }
+
+    private void setFinalHandStatus() {
+        for (Player player : players) {
+            for (Hand hand : player.getHands()) {
+                Hand dealerHand = dealer.getHand();
+                if (Hand.Status.IN_PROGRESS == hand.getStatus() ||
+                      Hand.Status.STAND == hand.getStatus()) {
+                    int dealerValue = dealer.getHand().getValue();
+                    int playerValue = hand.getValue();
+                    if (dealerValue < playerValue ||
+                         dealerHand.getStatus() == Hand.Status.LOSS) {
+                        hand.setStatus(Hand.Status.WIN);
+                    } else if (dealerValue > playerValue) {
+                        hand.setStatus(Hand.Status.LOSS);
+                    } else {
+                        hand.setStatus(Hand.Status.PUSH);
+                    }
                 }
             }
-        } while (value <= 16);
-    }
-
-    private void showAllPlayerCards(List<Player> players) {
-        for (Player player : players) {
-            showCards(player, null, false);
         }
     }
 
-    private void showPlayerCards(Player player) {
-        showCards(player, null, false);
+    private void showAllCards(boolean dealerHidden) {
+        showAllCards(StringUtils.EMPTY, 1, dealerHidden);
     }
 
-    private void showDealerCards(Dealer dealer, boolean dealerHide) {
-        showCards(null, dealer, dealerHide);
-    }
-
-    private void showCards(Player player, Dealer dealer, boolean dealerHide) {
-        if (dealer != null) {
-            if (dealerHide) {
-                print("Dealer shows: " + dealer.getExposedValue() + " ");
-                for (Card card : dealer.getExposedCards())
-                    print(UnicodeCardMapping.getCard(card) + " ");
-            } else {
-                print("Dealer: " + dealer.getHand().getValue() + " ");
-                for (Card card : dealer.getHand().getCards())
-                    print(UnicodeCardMapping.getCard(card) + " ");
+    private void showAllCards(String name, int activeHand, boolean dealerHidden) {
+        showDealerCards(dealerHidden);
+        for (Player player : players) {
+            for (Hand hand : player.getHands()) {
+                if (name.equals(player.getName()) && activeHand == hand.getId()) {
+                    showPlayerCards(player, hand,"*");
+                } else {
+                    showPlayerCards(player, hand, StringUtils.EMPTY);
+                }
             }
         }
-        if (player != null) {
-            print(player.getName() + ": " + player.getHand().getValue() + " ");
-            for (Card card : player.getHand().getCards())
+    }
+
+    private void showDealerCards(boolean cardHidden) {
+        if (cardHidden) {
+            print("Dealer shows: " + dealer.getExposedValue() + " ");
+            StringBuilder sb = new StringBuilder();
+            String hiddenCard = sb.appendCodePoint(0x1F0A0).toString();
+            print(hiddenCard + " ");
+            for (Card card : dealer.getExposedCards())
+                print(UnicodeCardMapping.getCard(card) + " ");
+        } else {
+            print("Dealer: " + dealer.getHand().getValue() + " ");
+            for (Card card : dealer.getHand().getCards())
                 print(UnicodeCardMapping.getCard(card) + " ");
         }
         print("\n");
     }
 
+    private void showPlayerCards(Player player, Hand hand, String prefix) {
+        if (!StringUtils.EMPTY.equals(prefix)) {
+            prefix += " ";
+        }
+        print(prefix + player.getName() + ": " + hand.getValue() + " ");
+        for (Card card : hand.getCards()) {
+            print(UnicodeCardMapping.getCard(card) + " ");
+        }
+        print("\n");
+    }
+
     /*
+    via bicyclecards.com
     If a player's first two cards are an ace and a "ten-card" (a picture card or 10),
     giving him a count of 21 in two cards, this is a natural or "blackjack."
     If any player has a natural and the dealer does not, the dealer immediately pays
@@ -230,29 +456,38 @@ public class Game {
     (but no additional amount). If the dealer and another player both have naturals,
     the bet of that player is a stand-off (a tie), and the player takes back his chips.
      */
-    private GameStatus checkNaturals(List<Player> players, Dealer dealer) {
-        boolean dealerBlackjack = false;
+    private GameStatus checkBlackjack() {
+        Hand dealerHand = dealer.getHand();
         GameStatus status = GameStatus.IN_PROGRESS;
-        if (dealer.getHand().getStatus() == Hand.Status.BLACKJACK) {
-            dealerBlackjack = true;
-            println("Dealer blackjack!");
-            showDealerCards(dealer, false);
+        if (dealerHand.getValue() == TWENTY_ONE) {
+            dealerHand.setStatus(Hand.Status.BLACKJACK);
+            println("\n *** Dealer Blackjack! *** \n");
             status = GameStatus.COMPLETE;
         }
         for (Player player : players) {
-            if (player.getHand().getValue() == TWENTY_ONE) {
-                if (dealerBlackjack) {
-                    player.getHand().setStatus(Hand.Status.PUSH);
-                    println(player.getName() + " gets a blackjack\n but so does the dealer so player pushes!");
+            int insurance = player.getInsurance();
+            if (insurance > 0 && Hand.Status.BLACKJACK == dealerHand.getStatus()) {
+                println(player.getName() + " wins insurance bet!");
+                player.addCash(insurance * 3);
+            }
+            Hand playerHand = player.getHands().get(0);
+            if (playerHand.getValue() == TWENTY_ONE) {
+                if (dealerHand.getStatus() == Hand.Status.BLACKJACK) {
+                    playerHand.setStatus(Hand.Status.PUSH);
+                    println(player.getName() + " has a blackjack\n but so does the dealer so player pushes!\n");
+                    showAllCards(false);
+                    print("\n");
                 } else {
-                    player.getHand().setStatus(Hand.Status.NATURAL);
-                    println(player.getName() + " gets a natural blackjack! $$$");
+                    playerHand.setStatus(Hand.Status.BLACKJACK);
+                    println(player.getName() + " has a blackjack! $$$\n");
+                    showAllCards(true);
+                    print("\n");
                 }
-                showPlayerCards(player);
-            } else if (dealerBlackjack) {
-                player.getHand().setStatus(Hand.Status.LOSS);
-                println(player.getName() + " loses this hand.");
-                showPlayerCards(player);
+            } else if (dealerHand.getStatus() == Hand.Status.BLACKJACK) {
+                playerHand.setStatus(Hand.Status.LOSS);
+                println(player.getName() + " loses this hand.\n");
+                showAllCards(false);
+                print("\n");
             }
         }
         return status;
@@ -262,18 +497,13 @@ public class Game {
         return bet >= minBet && bet <= maxBet;
     }
 
-    private void dealCards(Deck deck, List<Player> players, Dealer dealer) {
+    private void dealCards() {
+        println("Dealing cards...\n");
         for (Player player : players) {
-            List<Card> cards = new ArrayList<>();
-            cards.add(deck.dealCard());
-            cards.add(deck.dealCard());
-            Hand hand = new Hand(cards);
-            player.setHand(hand);
+            Hand hand = new Hand(new ArrayList<>(Arrays.asList(deck.dealCard(), deck.dealCard())));
+            player.setHands(Collections.singletonList(hand));
         }
-        List<Card> cards = new ArrayList<>();
-        cards.add(deck.dealCard());
-        cards.add(deck.dealCard());
-        Hand hand = new Hand(cards);
+        Hand hand = new Hand(new ArrayList<>(Arrays.asList(deck.dealCard(), deck.dealCard())));
         dealer.setHand(hand);
     }
 
@@ -306,7 +536,7 @@ public class Game {
     }
 
     // see https://commons.apache.org/proper/commons-cli/usage.html
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, InterruptedException {
         // create the command line parser and formatter
         CommandLineParser parser = new DefaultParser();
         HelpFormatter formatter = new HelpFormatter();
@@ -335,9 +565,18 @@ public class Game {
             }
             if (cmd.hasOption("c")) {
                 startingCash = Integer.parseInt(cmd.getOptionValue("cash"));
+                if (startingCash < 100 || startingCash > 10000) {
+                    throw new IllegalArgumentException("Starting cash must be between $10 and $10,000");
+                }
             }
             if (cmd.hasOption("p")) {
                 numberOfPlayers = Integer.parseInt(cmd.getOptionValue("players"));
+                if (numberOfPlayers < 1) {
+                    throw new IllegalArgumentException("Must have at least 1 player");
+                }
+                if (numberOfPlayers > 9) {
+                    throw new IllegalArgumentException("Cannot have over 9 players");
+                }
             }
             if (cmd.hasOption("m")) {
                 minBet = Integer.parseInt(cmd.getOptionValue("minbet"));
@@ -350,18 +589,23 @@ public class Game {
             }
             if (cmd.hasOption("d")) {
                 decks = Integer.parseInt(cmd.getOptionValue("decks"));
+                if (decks < 1 || decks > 10) {
+                    throw new IllegalArgumentException("Number of decks must be between 1 and 10");
+                }
             }
 
             Game newGame = new Game();
             newGame.play(startingCash, numberOfPlayers, minBet, maxBet, decks);
 
         } catch (NumberFormatException numberFormatException) {
-            System.out.print("Argument must be a number");
+            System.out.print("Arguments must be integers");
         } catch (MissingArgumentException missingArgumentException) {
             println(missingArgumentException.getMessage());
         } catch (ParseException parseException) {
             println(parseException.getMessage());
             formatter.printHelp("blackjack", options);
+        } finally {
+            print("\n\n");
         }
     }
 }

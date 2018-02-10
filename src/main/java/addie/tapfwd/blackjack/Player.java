@@ -1,27 +1,26 @@
 package addie.tapfwd.blackjack;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class Player {
 
-    private Hand hand;
-    private int bet;
+    private List<Hand> hands = new ArrayList<>();
     private int cash;
+    private int insurance;
     private String firstName;
     private String lastName;
 
-    public int getBet() {
-        return bet;
+    public List<Hand> getHands() {
+        return hands;
     }
 
-    public void setBet(int bet) {
-        this.bet = bet;
+    public void setHands(List<Hand> hands) {
+        this.hands = hands;
     }
 
-    public Hand getHand() {
-        return hand;
-    }
-
-    public void setHand(Hand hand) {
-        this.hand = hand;
+     public void addHand(Hand hand) {
+        this.hands.add(hand);
     }
 
     public int getCash() {
@@ -32,6 +31,9 @@ public class Player {
         this.cash = cash;
     }
 
+    public void subCash(int cash) {
+        this.cash -= cash;
+    }
     public void addCash(int cash) {
         this.cash += cash;
     }
@@ -60,4 +62,11 @@ public class Player {
         this.lastName = lastName;
     }
 
+    public int getInsurance() {
+        return insurance;
+    }
+
+    public void setInsurance(int insurance) {
+        this.insurance = insurance;
+    }
 }

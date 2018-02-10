@@ -1,29 +1,26 @@
 # README #
 
-This README would normally document whatever steps are necessary to get your application up and running.
+This is a basic command line blackjack game 
 
-### What is this repository for? ###
+### Rules ###
 
-* Quick summary
-* Version
-* [Learn Markdown](https://bitbucket.org/tutorials/markdowndemo)
+* Options are configurable via the command line
+* Defaults
+    * Single player 
+    * Cash - $1000
+    * Min Bet - $2
+    * Max Bet - $10,000
+    * Number of Decks - 6
+    
+### Double Down ###
 
-### How do I get set up? ###
+* Player may double down on 9, 10, or 11
 
-* Summary of set up
-* Configuration
-* Dependencies
-* Database configuration
-* How to run tests
-* Deployment instructions
+### Insurance ###
 
-### Contribution guidelines ###
+* Insurance pays out 2:1 
+* You can wager up to half of your initial bet
 
-* Writing tests
-* Code review
-* Other guidelines
+### Splitting ###
 
-### Who do I talk to? ###
-
-* Repo owner or admin
-* Other community or team contact
+* Initial hand my be split if they are the same rank 

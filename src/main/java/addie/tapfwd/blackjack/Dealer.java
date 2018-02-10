@@ -4,13 +4,7 @@ import java.util.List;
 
 public class Dealer {
 
-    private Card hiddenCard;
-    private List<Card> exposedCards;
     private Hand hand;
-
-    public void addCard(Card card) {
-        hand.addCard(card);
-    }
 
     public Card getHiddenCard() {
         return hand.getCards().get(0);
@@ -29,6 +23,10 @@ public class Dealer {
     }
 
     public int getExposedValue() {
-        return getHand().getValue() - getHiddenCard().getRank().getValue();
+        int totalValue = 0;
+        for (Card card : getHand().getCards()) {
+            totalValue += card.getRank().getValue();
+        }
+        return totalValue - getHiddenCard().getRank().getValue();
     }
 }

@@ -548,7 +548,7 @@ public class Game {
         options.addOption("c", "cash", true, "starting cash for players");
         options.addOption("m", "minbet", true, "minimum bet");
         options.addOption("M", "maxbet", true, "maximum bet");
-        options.addOption("d", "decks", true, "maximum bet");
+        options.addOption("d", "decks", true, "number of decks");
 
         try {
             int startingCash = DEFAULT_STARTING_CASH;

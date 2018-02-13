@@ -10,6 +10,7 @@ public class Player {
     private int insurance;
     private String firstName;
     private String lastName;
+    int bet;
 
     public List<Hand> getHands() {
         return hands;
@@ -68,5 +69,13 @@ public class Player {
 
     public void setInsurance(int insurance) {
         this.insurance = insurance;
+    }
+
+    public int getBet() {
+        return bet;
+    }
+
+    public void setBet(int bet) {
+        this.bet = bet;
     }
 }

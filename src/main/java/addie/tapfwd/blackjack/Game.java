@@ -189,7 +189,7 @@ public class Game {
                 print("Enter bet for " + player.getName() + ": ");
                 bet = validateBet(in.nextLine());
             }
-            player.getHands().get(0).setBet(bet);
+            player.setBet(bet);
             player.subCash(bet);
         }
         println("All bets are in.\n");
@@ -501,6 +501,7 @@ public class Game {
         println("Dealing cards...\n");
         for (Player player : players) {
             Hand hand = new Hand(new ArrayList<>(Arrays.asList(deck.dealCard(), deck.dealCard())));
+            hand.setBet(player.getBet());
             player.setHands(Collections.singletonList(hand));
         }
         Hand hand = new Hand(new ArrayList<>(Arrays.asList(deck.dealCard(), deck.dealCard())));

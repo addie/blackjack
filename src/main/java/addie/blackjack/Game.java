@@ -566,8 +566,8 @@ public class Game {
             }
             if (cmd.hasOption("c")) {
                 startingCash = Integer.parseInt(cmd.getOptionValue("cash"));
-                if (startingCash < 100 || startingCash > 10000) {
-                    throw new IllegalArgumentException("Starting cash must be between $10 and $10,000");
+                if (startingCash < 10) {
+                    throw new IllegalArgumentException("Starting cash must be at least $10");
                 }
             }
             if (cmd.hasOption("p")) {

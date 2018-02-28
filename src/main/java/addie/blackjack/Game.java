@@ -6,6 +6,7 @@ import org.apache.commons.lang3.StringUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.text.NumberFormat;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -43,7 +44,8 @@ public class Game {
         // Intro
         printSplash();
         println("Welcome to Blackjack! by Addie Bendory");
-        println("Number of Players: " + numPlayers + "\nStarting Cash: $" + startingCash);
+        String currency = NumberFormat.getCurrencyInstance(Locale.US).format(startingCash);
+        println("Number of Players: " + numPlayers + "\nStarting Cash: " + currency.substring(0,currency.length()-3));
         print("\n");
 
         // Create the game components
@@ -156,7 +158,8 @@ public class Game {
     private void getInsurance(Player player) {
         String input;
         do {
-            print("How much? (You can wager up to $" + player.getHands().get(0).getBet() / 2 + ") > ");
+            String currency = NumberFormat.getCurrencyInstance(Locale.US).format(player.getHands().get(0).getBet() / 2);
+            print("How much? (You can wager up to " + currency.substring(0,currency.length()-3) + ") > ");
             input = in.nextLine();
         } while (Integer.parseInt(input) > (player.getHands().get(0).getBet() / 2));
         int insurance = Integer.parseInt(input);
@@ -170,7 +173,8 @@ public class Game {
 
     private void showPlayersCashRemaining() {
         for (Player player : players) {
-            println(player.getName() + " has $" + player.getCash() + " remaining");
+            String currency = NumberFormat.getCurrencyInstance(Locale.US).format(player.getCash());
+            println(player.getName() + " has " + currency.substring(0,currency.length()-3) + " remaining");
         }
         print("\n");
     }
@@ -185,7 +189,9 @@ public class Game {
             print("Enter bet for " + player.getName() + ": ");
             int bet = validateBet(in.nextLine());
             while (!validBet(bet, minBet, playerMaxBet)) {
-                println("Invalid bet. Bet must be between $" + minBet + " and $" + playerMaxBet);
+                String minCurrency = NumberFormat.getCurrencyInstance(Locale.US).format(minBet);
+                String maxCurrency = NumberFormat.getCurrencyInstance(Locale.US).format(playerMaxBet);
+                println("Invalid bet. Bet must be between " + minCurrency + " and " + maxCurrency);
                 print("Enter bet for " + player.getName() + ": ");
                 bet = validateBet(in.nextLine());
             }

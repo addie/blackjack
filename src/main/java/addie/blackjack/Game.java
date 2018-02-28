@@ -1,4 +1,4 @@
-package addie.tapfwd.blackjack;
+package addie.blackjack;
 
 import org.apache.commons.cli.*;
 import org.apache.commons.io.IOUtils;

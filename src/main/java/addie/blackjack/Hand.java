@@ -1,9 +1,9 @@
-package addie.tapfwd.blackjack;
+package addie.blackjack;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import static addie.tapfwd.blackjack.Hand.Status.IN_PROGRESS;
+import static addie.blackjack.Hand.Status.IN_PROGRESS;
 
 public class Hand {
     private static final int TWENTY_ONE = 21;

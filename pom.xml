@@ -46,7 +46,7 @@
                     <archive>
                         <manifest>
                             <addClasspath>true</addClasspath>
-                            <mainClass>addie.tapfwd.blackjack.Game</mainClass>
+                            <mainClass>addie.blackjack.Game</mainClass>
                         </manifest>
                     </archive>
                     <descriptorRefs>

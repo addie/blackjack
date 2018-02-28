@@ -1,4 +1,4 @@
-package addie.tapfwd.blackjack;
+package addie.blackjack;
 
 import java.util.HashMap;
 import java.util.Map;

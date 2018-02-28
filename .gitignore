@@ -1,8 +1,8 @@
 .idea/
-blackjack.iml
+*.iml
+*.zip
 META-INF/
 lib/
 out/
 target/
 .DS_Store
-target.zip

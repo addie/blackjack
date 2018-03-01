@@ -45,7 +45,7 @@ public class Game {
         printSplash();
         println("Welcome to Blackjack! by Addie Bendory");
         String currency = NumberFormat.getCurrencyInstance(Locale.US).format(startingCash);
-        println("Number of Players: " + numPlayers + "\nStarting Cash: " + currency.substring(0,currency.length()-3));
+        println("Number of Players: " + numPlayers + "\nStarting Cash: " + chop(currency));
         print("\n");
 
         // Create the game components
@@ -159,7 +159,7 @@ public class Game {
         String input;
         do {
             String currency = NumberFormat.getCurrencyInstance(Locale.US).format(player.getHands().get(0).getBet() / 2);
-            print("How much? (You can wager up to " + currency.substring(0,currency.length()-3) + ") > ");
+            print("How much? (You can wager up to " + chop(currency) + ") > ");
             input = in.nextLine();
         } while (Integer.parseInt(input) > (player.getHands().get(0).getBet() / 2));
         int insurance = Integer.parseInt(input);
@@ -174,7 +174,7 @@ public class Game {
     private void showPlayersCashRemaining() {
         for (Player player : players) {
             String currency = NumberFormat.getCurrencyInstance(Locale.US).format(player.getCash());
-            println(player.getName() + " has " + currency.substring(0,currency.length()-3) + " remaining");
+            println(player.getName() + " has " + chop(currency) + " remaining");
         }
         print("\n");
     }
@@ -191,7 +191,7 @@ public class Game {
             while (!validBet(bet, minBet, playerMaxBet)) {
                 String minCurrency = NumberFormat.getCurrencyInstance(Locale.US).format(minBet);
                 String maxCurrency = NumberFormat.getCurrencyInstance(Locale.US).format(playerMaxBet);
-                println("Invalid bet. Bet must be between " + minCurrency + " and " + maxCurrency);
+                println("Invalid bet. Bet must be between " + chop(minCurrency) + " and " + chop(maxCurrency));
                 print("Enter bet for " + player.getName() + ": ");
                 bet = validateBet(in.nextLine());
             }
@@ -535,6 +535,10 @@ public class Game {
             players.add(player);
         }
         return players;
+    }
+
+    private String chop(String cash) {
+        return cash.substring(0, cash.length() - 3);
     }
 
     private void printSplash() throws IOException {
